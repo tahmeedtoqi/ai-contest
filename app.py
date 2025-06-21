@@ -3,12 +3,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import os
 
 # Config
 z_dim = 100
 device = torch.device("cpu")
 
-# Generator Model
+# Generator must EXACTLY match training
 class Generator(nn.Module):
     def __init__(self, z_dim):
         super(Generator, self).__init__()
@@ -31,13 +32,19 @@ class Generator(nn.Module):
 @st.cache_resource
 def load_generator():
     model = Generator(z_dim).to(device)
-    model.load_state_dict(torch.load("checkpoint.pth", map_location=device))
+    try:
+        model.load_state_dict(torch.load("checkpoint.pth", map_location=device))
+    except Exception as e:
+        st.error("❌ Failed to load checkpoint.pth. Please check that the model architecture exactly matches the one used in training.")
+        st.exception(e)
+        st.stop()
     model.eval()
     return model
 
+st.title("MNIST Digit Generator")
+
 generator = load_generator()
 
-st.title("MNIST Digit Generator")
 digit = st.selectbox("Choose a digit (0–9):", list(range(10)))
 
 if st.button("Generate Samples"):

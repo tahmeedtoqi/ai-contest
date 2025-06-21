@@ -1,23 +1,26 @@
-
 import streamlit as st
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-import numpy as np
 
-# Generator class definition must match the training script
-class Generator(torch.nn.Module):
+# Config
+z_dim = 100
+device = torch.device("cpu")
+
+# Generator Model
+class Generator(nn.Module):
     def __init__(self, z_dim):
         super(Generator, self).__init__()
-        self.gen = torch.nn.Sequential(
-            torch.nn.Linear(z_dim + 10, 256),
-            torch.nn.ReLU(True),
-            torch.nn.Linear(256, 512),
-            torch.nn.ReLU(True),
-            torch.nn.Linear(512, 1024),
-            torch.nn.ReLU(True),
-            torch.nn.Linear(1024, 28*28),
-            torch.nn.Tanh()
+        self.gen = nn.Sequential(
+            nn.Linear(z_dim + 10, 256),
+            nn.ReLU(True),
+            nn.Linear(256, 512),
+            nn.ReLU(True),
+            nn.Linear(512, 1024),
+            nn.ReLU(True),
+            nn.Linear(1024, 28 * 28),
+            nn.Tanh()
         )
 
     def forward(self, z, labels):
@@ -25,36 +28,26 @@ class Generator(torch.nn.Module):
         x = torch.cat([z, one_hot], dim=1)
         return self.gen(x).view(-1, 1, 28, 28)
 
-# App title and setup
-st.set_page_config(page_title="Digit Generator", layout="centered")
-st.title("🖊️ Handwritten Digit Generator")
-st.markdown("Select a digit (0–9) and generate 5 synthetic handwritten images using a GAN trained on MNIST.")
-
-# Load model
 @st.cache_resource
 def load_generator():
-    model = Generator(z_dim=100)
-    model.load_state_dict(torch.load("checkpoint.pth", map_location=torch.device("cpu")))
+    model = Generator(z_dim).to(device)
+    model.load_state_dict(torch.load("checkpoint.pth", map_location=device))
     model.eval()
     return model
 
 generator = load_generator()
 
-# User input
-digit = st.number_input("Choose a digit to generate (0–9):", min_value=0, max_value=9, step=1)
+st.title("MNIST Digit Generator")
+digit = st.selectbox("Choose a digit (0–9):", list(range(10)))
 
-if st.button("✨ Generate Images"):
-    with st.spinner("Generating images..."):
-        torch.manual_seed(42)
-        z = torch.randn(5, 100)
-        labels = torch.tensor([digit] * 5)
-        with torch.no_grad():
-            images = generator(z, labels)
+if st.button("Generate Samples"):
+    labels = torch.full((5,), digit, dtype=torch.long).to(device)
+    z = torch.randn(5, z_dim).to(device)
+    with torch.no_grad():
+        samples = generator(z, labels).cpu().squeeze()
 
-        # Prepare plot
-        fig, axes = plt.subplots(1, 5, figsize=(12, 3))
-        for i, ax in enumerate(axes):
-            ax.imshow(images[i].squeeze(), cmap="gray_r")
-            ax.axis("off")
-        st.pyplot(fig)
-        st.success("Done! These are synthetic samples of the digit {}.".format(digit))
+    fig, axes = plt.subplots(1, 5, figsize=(10, 2))
+    for i in range(5):
+        axes[i].imshow(samples[i], cmap="gray")
+        axes[i].axis("off")
+    st.pyplot(fig)

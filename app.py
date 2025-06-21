@@ -6,68 +6,72 @@ import matplotlib.pyplot as plt
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-latent_dim = 100
 
-# Define the generator model (same architecture as in training)
+# Model settings
+latent_dim = 100
+img_shape = (1, 28, 28)
+num_classes = 10
+
+# Generator definition (must match training script exactly)
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(latent_dim, 128 * 7 * 7),
-            nn.ReLU(True)
-        )
-        self.upsample = nn.Sequential(
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(128, 128, 3, padding=1),
-            nn.BatchNorm2d(128, 0.8),
-            nn.ReLU(True),
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(128, 64, 3, padding=1),
-            nn.BatchNorm2d(64, 0.8),
-            nn.ReLU(True),
-            nn.Conv2d(64, 1, 3, padding=1),
+        self.label_emb = nn.Embedding(num_classes, num_classes)
+
+        self.model = nn.Sequential(
+            nn.Linear(latent_dim + num_classes, 128),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(128, 256),
+            nn.BatchNorm1d(256, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(256, 512),
+            nn.BatchNorm1d(512, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(512, 1024),
+            nn.BatchNorm1d(1024, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(1024, int(torch.prod(torch.tensor(img_shape)))),
             nn.Tanh()
         )
 
-    def forward(self, z):
-        out = self.fc(z)
-        out = out.view(out.shape[0], 128, 7, 7)
-        img = self.upsample(out)
-        return img
+    def forward(self, noise, labels):
+        gen_input = torch.cat((noise, self.label_emb(labels)), dim=1)
+        out = self.model(gen_input)
+        return out.view(out.size(0), *img_shape)
 
-# Load generator model from saved checkpoint
+# Load the trained generator
 @st.cache_resource
 def load_generator():
     model = Generator().to(device)
-    model.load_state_dict(torch.load("generator_model.pth", map_location=device))
+    model.load_state_dict(torch.load("generator.pth", map_location=device))
     model.eval()
     return model
 
-# Generate images using the generator
-def generate_images(generator, num_images):
-    z = torch.randn(num_images, latent_dim).to(device)
+# Image generation function
+def generate_images(generator, digit, num_images):
+    noise = torch.randn(num_images, latent_dim).to(device)
+    labels = torch.full((num_images,), digit, dtype=torch.long).to(device)
     with torch.no_grad():
-        gen_imgs = generator(z)
-    gen_imgs = gen_imgs.cpu().numpy()
-    images = [gen_imgs[i][0] for i in range(num_images)]  # Extract channel 0
-    return images
+        generated = generator(noise, labels)
+    return generated.cpu().numpy()
 
-# Streamlit UI
-st.title("MNIST Digit Generator")
-st.markdown("Generate handwritten digit images using a trained with Thoky generator.")
+# App UI
+st.title("Conditional MNIST Digit Generator")
+st.markdown("Generate MNIST-style handwritten digits with a trained conditional.")
 
-num_images = st.slider("Number of images", 1, 10, 5)
+digit = st.selectbox("Select a digit (0-9) to generate", list(range(10)))
+num_images = st.slider("Number of images to generate", 1, 10, 5)
 
 if st.button("Generate"):
     try:
-        generator = load_generator()
-        with st.spinner("Generating images..."):
-            images = generate_images(generator, num_images)
+        gen = load_generator()
+        images = generate_images(gen, digit, num_images)
 
-        st.success("Generated Images")
+        st.success(f"Generated {num_images} images for digit '{digit}'")
         cols = st.columns(num_images)
-        for i, col in enumerate(cols):
-            col.image(images[i], width=100, clamp=True, channels="GRAY")
+        for i in range(num_images):
+            img = images[i].squeeze()
+            cols[i].image(img, width=100, clamp=True, channels="GRAY")
     except Exception as e:
-        st.error("\u26A0\uFE0F Failed to generate images.")
+        st.error("❌ Failed to generate images.")
         st.exception(e)

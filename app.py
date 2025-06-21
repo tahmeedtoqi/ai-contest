@@ -56,7 +56,7 @@ def generate_images(generator, digit, num_images):
     return generated.cpu().numpy()
 
 # App UI
-st.title("🧠 Conditional GAN - MNIST Digit Generator")
+st.title("Tahmeed Thoky Conditional GAN - MNIST Digit Generator")
 st.markdown("Generate MNIST-style handwritten digits using a trained CGAN model.")
 
 # User input section

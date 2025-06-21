@@ -34,7 +34,7 @@ st.markdown("Select a digit (0–9) and generate 5 synthetic handwritten images 
 @st.cache_resource
 def load_generator():
     model = Generator(z_dim=100)
-    model.load_state_dict(torch.load("models/mnist_generator.pth", map_location=torch.device("cpu")))
+    model.load_state_dict(torch.load("checkpoint.pth", map_location=torch.device("cpu")))
     model.eval()
     return model
 

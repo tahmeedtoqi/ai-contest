@@ -1,60 +1,73 @@
 import streamlit as st
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import numpy as np
 import matplotlib.pyplot as plt
-import os
 
-# Config
-z_dim = 100
-device = torch.device("cpu")
+device = torch.device("cpu")  # For Streamlit Cloud
 
-# Generator must EXACTLY match training
-class Generator(nn.Module):
-    def __init__(self, z_dim):
-        super(Generator, self).__init__()
-        self.gen = nn.Sequential(
-            nn.Linear(z_dim + 10, 256),
-            nn.ReLU(True),
-            nn.Linear(256, 512),
-            nn.ReLU(True),
-            nn.Linear(512, 1024),
-            nn.ReLU(True),
-            nn.Linear(1024, 28 * 28),
-            nn.Tanh()
-        )
+# Your original model architecture
+class NeuralNetwork(nn.Module):
+    def __init__(self, input_size, output_size, hidden_layers):
+        super().__init__()
+        layers = []
+        in_features = input_size
 
-    def forward(self, z, labels):
-        one_hot = F.one_hot(labels, num_classes=10).float()
-        x = torch.cat([z, one_hot], dim=1)
-        return self.gen(x).view(-1, 1, 28, 28)
+        for hidden in hidden_layers:
+            layers.append(nn.Linear(in_features, hidden))
+            layers.append(nn.ReLU())
+            in_features = hidden
+
+        layers.append(nn.Linear(in_features, output_size))
+        layers.append(nn.Tanh())
+
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
 
 @st.cache_resource
 def load_generator():
-    model = Generator(z_dim).to(device)
-    try:
-        model.load_state_dict(torch.load("checkpoint.pth", map_location=device))
-    except Exception as e:
-        st.error("❌ Failed to load checkpoint.pth. Please check that the model architecture exactly matches the one used in training.")
-        st.exception(e)
-        st.stop()
+    checkpoint = torch.load("checkpoint.pth", map_location=device)
+    model = NeuralNetwork(
+        input_size=checkpoint["input_size"],
+        output_size=checkpoint["output_size"],
+        hidden_layers=checkpoint["hidden_layers"]
+    )
+    model.load_state_dict(checkpoint["state_dict"])
+    model.to(device)
     model.eval()
     return model
 
-st.title("MNIST Digit Generator")
+def generate_images(model, digit, num_images=5):
+    z_dim = checkpoint["input_size"] - 10  # Infer z_dim from input size
+    z = torch.randn(num_images, z_dim)
+    labels = torch.full((num_images,), digit, dtype=torch.long)
+    one_hot = torch.nn.functional.one_hot(labels, num_classes=10).float()
+    input_vec = torch.cat([z, one_hot], dim=1)
 
-generator = load_generator()
-
-digit = st.selectbox("Choose a digit (0–9):", list(range(10)))
-
-if st.button("Generate Samples"):
-    labels = torch.full((5,), digit, dtype=torch.long).to(device)
-    z = torch.randn(5, z_dim).to(device)
     with torch.no_grad():
-        samples = generator(z, labels).cpu().squeeze()
+        outputs = model(input_vec).view(-1, 28, 28)
 
-    fig, axes = plt.subplots(1, 5, figsize=(10, 2))
-    for i in range(5):
-        axes[i].imshow(samples[i], cmap="gray")
-        axes[i].axis("off")
-    st.pyplot(fig)
+    return outputs.numpy()
+
+# Streamlit UI
+st.title("🧠 MNIST Digit Generator")
+st.write("Select a digit (0-9) to generate 5 handwritten-style images!")
+
+digit = st.number_input("Choose a digit", min_value=0, max_value=9, step=1)
+
+if st.button("Generate"):
+    try:
+        generator = load_generator()
+        checkpoint = torch.load("checkpoint.pth", map_location=device)  # needed to infer z_dim
+        images = generate_images(generator, digit)
+
+        fig, axs = plt.subplots(1, 5, figsize=(15, 3))
+        for i in range(5):
+            axs[i].imshow(images[i], cmap="gray")
+            axs[i].axis("off")
+
+        st.pyplot(fig)
+    except Exception as e:
+        st.error(f"⚠️ Failed to generate images.\n\n{e}")

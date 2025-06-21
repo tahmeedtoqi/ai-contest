@@ -1,9 +1,17 @@
-import streamlit as st
-import torch
-import torch.nn as nn
-import torchvision.transforms as transforms
 import numpy as np
-import matplotlib.pyplot as plt
+
+import torch
+from torch import nn, optim
+from torch.nn import functional as F
+from torchvision import datasets, transforms
+from torch.utils.data import SubsetRandomSampler, DataLoader
+from torch.autograd import Variable
+
+import os
+
+from time import time
+
+import matplotlib.pyplot as pltplt
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

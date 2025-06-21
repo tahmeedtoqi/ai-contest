@@ -36,7 +36,7 @@ class NeuralNetwork(nn.Module):
         return torch.tanh(self.output_layer(x))
 
 # Load model from checkpoint
-@st.cache_resource
+@st.cache(allow_output_mutation=True)
 def load_generator():
     checkpoint = torch.load("checkpoint.pth", map_location=device)
     model = NeuralNetwork(

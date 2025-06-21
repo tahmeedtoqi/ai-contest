@@ -2,7 +2,6 @@ import streamlit as st
 import torch
 import torch.nn as nn
 import numpy as np
-import matplotlib.pyplot as plt
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -17,7 +16,6 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
         self.label_emb = nn.Embedding(num_classes, num_classes)
-
         self.model = nn.Sequential(
             nn.Linear(latent_dim + num_classes, 128),
             nn.LeakyReLU(0.2, inplace=True),
@@ -30,14 +28,16 @@ class Generator(nn.Module):
             nn.Linear(512, 1024),
             nn.BatchNorm1d(1024, 0.8),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(1024, int(torch.prod(torch.tensor(img_shape)))),
+            nn.Linear(1024, int(np.prod(img_shape))),
             nn.Tanh()
         )
 
     def forward(self, noise, labels):
-        gen_input = torch.cat((noise, self.label_emb(labels)), dim=1)
-        out = self.model(gen_input)
-        return out.view(out.size(0), *img_shape)
+        label_input = self.label_emb(labels)
+        gen_input = torch.cat((noise, label_input), -1)
+        img = self.model(gen_input)
+        img = img.view(img.size(0), *img_shape)
+        return img
 
 # Load the trained generator
 @st.cache_resource
@@ -56,18 +56,27 @@ def generate_images(generator, digit, num_images):
     return generated.cpu().numpy()
 
 # App UI
-st.title("Conditional MNIST Digit Generator")
-st.markdown("Generate MNIST-style handwritten digits with a trained conditional.")
+st.title("🧠 Conditional GAN - MNIST Digit Generator")
+st.markdown("Generate MNIST-style handwritten digits using a trained CGAN model.")
 
-digit = st.selectbox("Select a digit (0-9) to generate", list(range(10)))
+# User input section
+st.subheader("Choose a Digit to Generate")
+use_manual_input = st.checkbox("Enter digit manually", value=False)
+
+if use_manual_input:
+    digit = st.number_input("Enter digit (0–9):", min_value=0, max_value=9, step=1)
+else:
+    digit = st.selectbox("Select digit", list(range(10)))
+
 num_images = st.slider("Number of images to generate", 1, 10, 5)
 
+# Generate button
 if st.button("Generate"):
     try:
         gen = load_generator()
-        images = generate_images(gen, digit, num_images)
+        images = generate_images(gen, int(digit), num_images)
 
-        st.success(f"Generated {num_images} images for digit '{digit}'")
+        st.success(f"Generated {num_images} image(s) for digit '{digit}'")
         cols = st.columns(num_images)
         for i in range(num_images):
             img = images[i].squeeze()

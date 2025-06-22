@@ -78,8 +78,9 @@ if st.button("Generate"):
         st.success(f"Generated {num_images} image(s) for digit '{digit}'")
         cols = st.columns(num_images)
         for i in range(num_images):
-            img = images[i].squeeze()
+            img = (images[i].squeeze() + 1) / 2.0  # Convert from [-1, 1] to [0, 1]
             cols[i].image(img, width=100, clamp=True, channels="GRAY")
+
     except Exception as e:
         st.error("❌ Failed to generate images.")
         st.exception(e)

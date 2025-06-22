@@ -42,7 +42,7 @@ class Generator(nn.Module):
 @st.cache_resource
 def load_generator():
     model = Generator().to(device)
-    model.load_state_dict(torch.load("generator.pth", map_location=device))
+    model.load_state_dict(torch.load("generator2.pth", map_location=device))
     model.eval()
     return model
 

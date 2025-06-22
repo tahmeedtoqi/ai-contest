@@ -16,28 +16,27 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
         self.label_emb = nn.Embedding(num_classes, num_classes)
+
         self.model = nn.Sequential(
             nn.Linear(latent_dim + num_classes, 128),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.GELU(),
             nn.Linear(128, 256),
             nn.BatchNorm1d(256, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.GELU(),
             nn.Linear(256, 512),
             nn.BatchNorm1d(512, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.GELU(),
             nn.Linear(512, 1024),
             nn.BatchNorm1d(1024, 0.8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(1024, int(np.prod(img_shape))),
+            nn.GELU(),
+            nn.Linear(1024, int(torch.prod(torch.tensor(img_shape)))),
             nn.Tanh()
         )
 
     def forward(self, noise, labels):
-        label_input = self.label_emb(labels)
-        gen_input = torch.cat((noise, label_input), -1)
-        img = self.model(gen_input)
-        img = img.view(img.size(0), *img_shape)
-        return img
+        gen_input = torch.cat((noise, self.label_emb(labels)), dim=1)
+        out = self.model(gen_input)
+        return out.view(out.size(0), *img_shape)
 
 # Load the trained generator
 @st.cache_resource
